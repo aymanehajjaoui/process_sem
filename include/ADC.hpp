@@ -1,12 +1,7 @@
-/* ADC.hpp */
-
-#pragma once
+/*ADC.hpp*/
 
 #include "rp.h"
 #include "Common.hpp"
 
-// Initializes Red Pitaya acquisition parameters and buffers
 void initialize_acq();
-
-// Releases Red Pitaya resources and disables acquisition
 void cleanup();

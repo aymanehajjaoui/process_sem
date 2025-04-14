@@ -1,8 +1,15 @@
-/* DataAcquisition.cpp */
+/*DataAcquisition.cpp*/
 
 #include "DataAcquisition.hpp"
 #include "SystemUtils.hpp"
 #include <iostream>
+#include <thread>
+#include <chrono>
+
+#include "DataAcquisition.hpp"
+#include "SystemUtils.hpp"
+#include <iostream>
+#include <thread>
 #include <chrono>
 
 void acquire_data(Channel &channel, rp_channel_t rp_channel)
@@ -26,7 +33,8 @@ void acquire_data(Channel &channel, rp_channel_t rp_channel)
                 channel.trigger_time_point = std::chrono::steady_clock::now();
                 channel.counters->trigger_time_ns.store(
                     std::chrono::duration_cast<std::chrono::nanoseconds>(
-                        channel.trigger_time_point.time_since_epoch()).count());
+                        channel.trigger_time_point.time_since_epoch())
+                        .count());
             }
         }
 
@@ -73,8 +81,7 @@ void acquire_data(Channel &channel, rp_channel_t rp_channel)
 
                 if (distance >= DATA_SIZE)
                 {
-                    std::cerr << "ERR: Overrun detected on channel " << rp_channel + 1
-                              << " at: " << channel.counters->acquire_count.load() << std::endl;
+                    std::cerr << "ERR: Overrun detected on channel " << rp_channel + 1 << " at: " << channel.counters->acquire_count.load() << std::endl;
                     stop_acquisition.store(true);
                     return;
                 }
@@ -91,7 +98,9 @@ void acquire_data(Channel &channel, rp_channel_t rp_channel)
                     auto part = std::make_shared<data_part_t>();
                     convert_raw_data(buffer_raw, part->data, samples_per_chunk);
 
-                    pos = (pos + samples_per_chunk) % DATA_SIZE;
+                    pos += samples_per_chunk;
+                    if (pos >= DATA_SIZE)
+                        pos -= DATA_SIZE;
 
                     if (save_data_csv)
                     {
@@ -116,21 +125,23 @@ void acquire_data(Channel &channel, rp_channel_t rp_channel)
         channel.end_time_point = std::chrono::steady_clock::now();
         channel.counters->end_time_ns.store(
             std::chrono::duration_cast<std::chrono::nanoseconds>(
-                channel.end_time_point.time_since_epoch()).count());
+                channel.end_time_point.time_since_epoch())
+                .count());
 
         channel.acquisition_done = true;
 
         if (save_data_csv)
             sem_post(&channel.data_sem_csv);
+
         if (save_data_dac)
             sem_post(&channel.data_sem_dac);
-        sem_post(&channel.model_sem);  // Wake model thread if waiting
+
+        sem_post(&channel.model_sem); // Wake up model thread if waiting
 
         std::cout << "Acquisition thread on channel " << static_cast<int>(channel.channel_id) + 1 << " exiting..." << std::endl;
     }
     catch (const std::exception &e)
     {
-        std::cerr << "Exception in acquire_data for channel " << static_cast<int>(channel.channel_id) + 1
-                  << ": " << e.what() << std::endl;
+        std::cerr << "Exception in acquire_data for channel " << static_cast<int>(channel.channel_id) + 1 << ": " << e.what() << std::endl;
     }
 }
