@@ -1,28 +1,26 @@
-/*modelWriter.cpp*/
+/* modelWriter.cpp */
 
 #include "ModelWriterCSV.hpp"
-#include "DAC.hpp"
 #include <iostream>
-#include <fstream>
-#include <thread>
-#include <chrono>
 #include <type_traits>
+#include <cstdio>
+#include <semaphore.h>
 
-// Generic output writer for model result
+// Generic output writer for different result types
 template <typename T>
 void write_output(FILE *file, int index, const T &value, double time_ms)
 {
-    if constexpr (std::is_integral<T>::value)
+    if constexpr (std::is_integral_v<T>)
     {
         fprintf(file, "%d,%d,%.6f\n", index, static_cast<int>(value), time_ms);
     }
-    else if constexpr (std::is_floating_point<T>::value)
+    else if constexpr (std::is_floating_point_v<T>)
     {
         fprintf(file, "%d,%.6f,%.6f\n", index, value, time_ms);
     }
     else
     {
-        fprintf(file, "%d,%d,%.6f\n", index, static_cast<int>(value), time_ms); // fallback
+        fprintf(file, "%d,%d,%.6f\n", index, static_cast<int>(value), time_ms); // Fallback
     }
 }
 
@@ -41,10 +39,11 @@ void log_results_csv(Channel &channel, const std::string &filename)
 
         while (true)
         {
+            // Wait for signal that new model result is available
             if (sem_wait(&channel.result_sem_csv) != 0)
             {
                 if (errno == EINTR && stop_program.load())
-                    break; // interrupted by SIGINT
+                    break;
                 continue;
             }
 
@@ -53,10 +52,11 @@ void log_results_csv(Channel &channel, const std::string &filename)
 
             while (!channel.result_buffer_csv.empty())
             {
-                const model_result_t &result = channel.result_buffer_csv.front();  // peek
+                const model_result_t &result = channel.result_buffer_csv.front();
                 write_output(output_file, output_index++, result.output[0], result.computation_time);
                 fflush(output_file);
-                channel.result_buffer_csv.pop_front();  // remove after processing
+
+                channel.result_buffer_csv.pop_front();
                 channel.counters->log_count_csv.fetch_add(1, std::memory_order_relaxed);
             }
 
@@ -65,10 +65,12 @@ void log_results_csv(Channel &channel, const std::string &filename)
         }
 
         fclose(output_file);
-        std::cout << "Logging inference results on CSV thread on channel " << static_cast<int>(channel.channel_id) + 1 << " exiting..." << std::endl;
+        std::cout << "Logging inference results on CSV thread on channel "
+                  << static_cast<int>(channel.channel_id) + 1 << " exiting..." << std::endl;
     }
     catch (const std::exception &e)
     {
-        std::cerr << "Exception in log_results_csv for channel " << static_cast<int>(channel.channel_id) + 1 << ": " << e.what() << std::endl;
+        std::cerr << "Exception in log_results_csv for channel "
+                  << static_cast<int>(channel.channel_id) + 1 << ": " << e.what() << std::endl;
     }
 }

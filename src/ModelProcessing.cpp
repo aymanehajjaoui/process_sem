@@ -2,17 +2,10 @@
 
 #include "ModelProcessing.hpp"
 #include <iostream>
-#include <thread>
 #include <chrono>
 #include <type_traits>
 
-#define WITH_CMSIS_NN 1
-#define ARM_MATH_DSP 1
-#define ARM_NN_TRUNCATE
-
-extern bool save_output_csv;
-extern bool save_output_dac;
-
+// Normalize input data to a fixed range before inference
 template <typename T>
 void sample_norm(T (&data)[MODEL_INPUT_DIM_0][MODEL_INPUT_DIM_1])
 {
@@ -21,6 +14,7 @@ void sample_norm(T (&data)[MODEL_INPUT_DIM_0][MODEL_INPUT_DIM_1])
     base_t min_val = data[0][0];
     base_t max_val = data[0][0];
 
+    // Find min and max
     for (size_t i = 1; i < MODEL_INPUT_DIM_0; ++i)
     {
         if (data[i][0] < min_val)
@@ -31,8 +25,9 @@ void sample_norm(T (&data)[MODEL_INPUT_DIM_0][MODEL_INPUT_DIM_1])
 
     base_t range = max_val - min_val;
     if (range == 0)
-        range = 1;
+        range = 1; // Avoid division by zero
 
+    // Normalize
     for (size_t i = 0; i < MODEL_INPUT_DIM_0; ++i)
     {
         if constexpr (std::is_floating_point<base_t>::value)
@@ -46,6 +41,7 @@ void sample_norm(T (&data)[MODEL_INPUT_DIM_0][MODEL_INPUT_DIM_1])
     }
 }
 
+// Main inference thread
 void model_inference(Channel &channel)
 {
     try
@@ -64,7 +60,7 @@ void model_inference(Channel &channel)
 
             while (!channel.model_queue.empty())
             {
-                std::shared_ptr<data_part_t> part = channel.model_queue.front();
+                auto part = channel.model_queue.front();
                 channel.model_queue.pop();
 
                 model_result_t result;
@@ -106,7 +102,7 @@ void model_inference(Channel &channel)
     }
 }
 
-
+// Inference with sample normalization before prediction
 void model_inference_mod(Channel &channel)
 {
     try
@@ -125,10 +121,10 @@ void model_inference_mod(Channel &channel)
 
             while (!channel.model_queue.empty())
             {
-                std::shared_ptr<data_part_t> part = channel.model_queue.front();
+                auto part = channel.model_queue.front();
                 channel.model_queue.pop();
 
-                sample_norm(part->data); // Normalize before inference
+                sample_norm(part->data); // Normalize the input
 
                 model_result_t result;
                 auto start = std::chrono::high_resolution_clock::now();

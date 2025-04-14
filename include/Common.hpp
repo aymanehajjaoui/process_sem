@@ -1,11 +1,13 @@
-/*Common.hpp*/
+/* Common.hpp */
 
 #pragma once
 
+// CMSIS-NN / ARM DSP acceleration macros
 #define WITH_CMSIS_NN 1
 #define ARM_MATH_DSP 1
 #define ARM_NN_TRUNCATE
 
+// STL headers
 #include <thread>
 #include <mutex>
 #include <condition_variable>
@@ -17,42 +19,49 @@
 #include <string>
 #include <sys/stat.h>
 #include <dirent.h>
-#include <atomic>
-#include <thread>
+#include <semaphore.h>
 
+// Red Pitaya and model includes
 #include "rp.h"
 #include "../model/include/model.h"
 
+// System constants
 #define DATA_SIZE 16384
 #define QUEUE_MAX_SIZE 1000000
 #define DECIMATION (125000 / MODEL_INPUT_DIM_0)
-#define DISK_SPACE_THRESHOLD 0.2 * 1024 * 1024 * 1024
+#define DISK_SPACE_THRESHOLD (0.2 * 1024 * 1024 * 1024) // 200 MB
+
+// Thread priority values
 #define acq_priority 1
 #define write__csv_priority 1
 #define write_dac_priority 1
 #define model_priority 20
 #define log_csv_priority 1
 #define log_dac_priority 1
+
+// Shared memory identifier
 #define SHM_COUNTERS "/channel_counters"
 
-// Global flags
+// Runtime flags
 extern bool save_data_csv;
 extern bool save_data_dac;
 extern bool save_output_csv;
 extern bool save_output_dac;
 
-
+// Input chunk for CNN
 struct data_part_t
 {
     input_t data;
 };
 
+// Output result from CNN
 struct model_result_t
 {
     output_t output;
     double computation_time;
 };
 
+// Shared counters for monitoring and logging
 struct shared_counters_t
 {
     std::atomic<int> acquire_count;
@@ -66,14 +75,17 @@ struct shared_counters_t
     std::atomic<int> ready_barrier;
 };
 
+// Structure representing a data processing channel
 struct Channel
 {
+    // Queues for data and model processing
     std::queue<std::shared_ptr<data_part_t>> data_queue_csv;
     std::queue<std::shared_ptr<data_part_t>> data_queue_dac;
     std::queue<std::shared_ptr<data_part_t>> model_queue;
     std::deque<model_result_t> result_buffer_csv;
     std::deque<model_result_t> result_buffer_dac;
 
+    // Synchronization
     sem_t data_sem_csv;
     sem_t data_sem_dac;
     sem_t model_sem;
@@ -82,9 +94,11 @@ struct Channel
 
     rp_acq_trig_state_t state;
 
+    // Timing info
     std::chrono::steady_clock::time_point trigger_time_point;
     std::chrono::steady_clock::time_point end_time_point;
 
+    // Flags
     bool acquisition_done = false;
     bool processing_done = false;
     bool channel_triggered = false;
@@ -96,14 +110,18 @@ struct Channel
     rp_channel_t channel_id;
 };
 
+// Global flags
 extern std::atomic<bool> stop_acquisition;
 extern std::atomic<bool> stop_program;
 
+// Global channels
 extern Channel channel1, channel2;
 
+// Child process PIDs
 extern pid_t pid1;
 extern pid_t pid2;
 
+// Converts raw int16 samples to model input type
 template <typename T>
 inline void convert_raw_data(const int16_t *src, T dst[MODEL_INPUT_DIM_0][1], size_t count)
 {

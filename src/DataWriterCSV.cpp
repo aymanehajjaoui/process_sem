@@ -2,11 +2,9 @@
 
 #include "DataWriterCSV.hpp"
 #include <iostream>
-#include <fstream>
-#include <thread>
-#include <chrono>
 #include <type_traits>
 
+// Helper function to write a scalar value to a file in CSV format
 template <typename T>
 void write_scalar(FILE *file, const T &val)
 {
@@ -14,7 +12,7 @@ void write_scalar(FILE *file, const T &val)
     {
         fprintf(file, "%.6f", val);
     }
-    else if constexpr (std::is_same_v<T, int8_t> || std::is_same_v<T, int16_t> || std::is_integral_v<T>)
+    else if constexpr (std::is_integral_v<T>)
     {
         fprintf(file, "%d", static_cast<int>(val));
     }
@@ -25,6 +23,7 @@ void write_scalar(FILE *file, const T &val)
     }
 }
 
+// Thread function to write acquired data to a CSV file
 void write_data_csv(Channel &channel, const std::string &filename)
 {
     try
@@ -38,6 +37,7 @@ void write_data_csv(Channel &channel, const std::string &filename)
 
         while (true)
         {
+            // Wait for new data or termination
             if (sem_wait(&channel.data_sem_csv) != 0)
             {
                 if (errno == EINTR && stop_program.load())
@@ -45,13 +45,13 @@ void write_data_csv(Channel &channel, const std::string &filename)
                 continue;
             }
 
-            // Process all queued data
+            // Write all available data in the queue
             while (!channel.data_queue_csv.empty())
             {
-                std::shared_ptr<data_part_t> part = channel.data_queue_csv.front();
+                auto part = channel.data_queue_csv.front();
                 channel.data_queue_csv.pop();
 
-                for (size_t k = 0; k < MODEL_INPUT_DIM_0; k++)
+                for (size_t k = 0; k < MODEL_INPUT_DIM_0; ++k)
                 {
                     write_scalar(buffer_output_file, part->data[k][0]);
                     if (k < MODEL_INPUT_DIM_0 - 1)
@@ -64,6 +64,7 @@ void write_data_csv(Channel &channel, const std::string &filename)
                 channel.counters->write_count_csv.fetch_add(1, std::memory_order_relaxed);
             }
 
+            // Exit if acquisition is complete and no more data to write
             if (channel.acquisition_done && channel.data_queue_csv.empty())
                 break;
         }
@@ -73,7 +74,7 @@ void write_data_csv(Channel &channel, const std::string &filename)
     }
     catch (const std::exception &e)
     {
-        std::cerr << "Exception in write_data_csv for channel " << static_cast<int>(channel.channel_id) + 1 << ": " << e.what() << std::endl;
+        std::cerr << "Exception in write_data_csv for channel " << static_cast<int>(channel.channel_id) + 1
+                  << ": " << e.what() << std::endl;
     }
 }
-
