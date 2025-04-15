@@ -1,5 +1,5 @@
 ### process_sem
-This is a template used to generate code for RedPitaya using a generated model qualia. This version threads (for CH1 and CH2) synchronized using semaphores.
+This is a template used to generate code for RedPitaya using a generated model qualia. This version uses 2 processes (for CH1 and CH2) including threads synchronized using semaphores.
 ### Project structure
 ```bash
 process_sem/
